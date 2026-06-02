@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arcadia - Control de Despacho Geoespacial</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        #map { height: calc(100vh - 80px); }
+        .dark-theme-map { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-100 font-sans min-h-screen flex flex-col">
+
+    <header class="bg-gray-900 border-b border-gray-800 px-6 py-4 flex justify-between items-center shadow-lg">
+        <div class="flex items-center space-x-3">
+            <span class="text-red-500 text-2xl animate-pulse">●</span>
+            <h1 class="text-xl font-bold tracking-wider text-gray-200">EMERGENCY DISPATCH LIVE (ARAGUA)</h1>
+        </div>
+        <div class="text-sm text-gray-400 bg-gray-950 px-3 py-1.5 rounded border border-gray-800">
+            Backend: <span class="text-green-400 font-mono">Go v1.21 (Port 8081)</span>
+        </div>
+    </header>
+
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-4 p-4">
+        <div class="lg:col-span-1 bg-gray-900 rounded-xl p-4 border border-gray-800 flex flex-col justify-between shadow-xl">
+            <div>
+                <h2 class="text-lg font-semibold mb-4 text-red-400 border-b border-gray-800 pb-2">📊 Analítica de Unidades</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-gray-400">
+                        <thead class="text-xs text-gray-400 uppercase bg-gray-950">
+                            <tr>
+                                <th class="p-2 border border-gray-800">Unidad</th>
+                                <th class="p-2 border border-gray-800 text-center">Despachos</th>
+                                <th class="p-2 border border-gray-800 text-right">ETA Prom</th>
+                            </tr>
+                        </thead>
+                        <tbody id="metrics-table">
+                            <tr><td colspan="3" class="p-4 text-center text-gray-600">Conectando con Backend...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="lg:col-span-3 bg-gray-900 rounded-xl overflow-hidden border border-gray-800 shadow-xl relative">
+            <div id="map" class="w-full h-full dark-theme-map"></div>
+        </div>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map').setView([10.2442, -67.5921], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+        let activeMarkers = {};
+        let activeRoutes = {};
+
+        const routeStyles = {
+            'UNIT-FIRE-03': { color: '#ef4444', weight: 4, opacity: 0.8 },
+            'UNIT-AMBULANCE-01': { color: '#10b981', weight: 4, opacity: 0.8 },
+            'UNIT-POLICE-09': { color: '#3b82f6', weight: 4, opacity: 0.8 },
+            'default': { color: '#f59e0b', weight: 3, opacity: 0.7 }
+        };
+
+        function parseWKTPoint(wkt) {
+            if (!wkt || typeof wkt !== 'string') return null;
+            const coords = wkt.replace("POINT(", "").replace(")", "").split(" ");
+            return [parseFloat(coords[1]), parseFloat(coords[0])];
+        }
+
+        async function fetchAnalytics() {
+            try {
+                const response = await fetch('http://127.0.0.1:8081/api/analytics');
+                const data = await response.json();
+                updateUI(data || []);
+            } catch (error) { console.error('Error:', error); }
+        }
+
+        function updateUI(metrics) {
+            const tableBody = document.getElementById('metrics-table');
+            tableBody.innerHTML = '';
+            metrics.forEach(metric => {
+                const row = document.createElement('tr');
+                row.className = "border-b border-gray-800 hover:bg-gray-800/50";
+                row.innerHTML = `<td class="p-2 font-mono">${metric.unidad}</td><td class="p-2 text-center">${metric.total_despachos}</td><td class="p-2 text-right">${metric.eta_promedio_min} min</td>`;
+                tableBody.appendChild(row);
+
+                // Manejo seguro del GeoJSON
+                if (metric.ultima_ruta) {
+                    try {
+                        const geo = typeof metric.ultima_ruta === 'string' ? JSON.parse(metric.ultima_ruta) : metric.ultima_ruta;
+                        if (activeRoutes[metric.unidad]) map.removeLayer(activeRoutes[metric.unidad]);
+                        activeRoutes[metric.unidad] = L.geoJSON(geo, { style: routeStyles[metric.unidad] || routeStyles['default'] }).addTo(map);
+                    } catch (e) { console.error("Error GeoJSON", e); }
+                }
+
+                const latLng = parseWKTPoint(metric.centroide_operaciones);
+                if (latLng) {
+                    if (activeMarkers[metric.unidad]) {
+                        activeMarkers[metric.unidad].setLatLng(latLng);
+                    } else {
+                        activeMarkers[metric.unidad] = L.marker(latLng).addTo(map).bindPopup(`Unidad: ${metric.unidad}`);
+                    }
+                }
+            });
+        }
+
+        fetchAnalytics();
+        setInterval(fetchAnalytics, 3000);
+    </script>
+</body>
+</html>

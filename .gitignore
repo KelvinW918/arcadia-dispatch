@@ -1,13 +1,4 @@
-# Entornos virtuales
 venv/
-.env
-
-# Binarios de Go y archivos temporales
 *.exe
-*.o
-*.out
-
-# Caché y archivos de sistema
+.env
 __pycache__/
-.vscode/
-.DS_Store
