@@ -1,4 +1,5 @@
 # 🚒 Arcadia · Emergency Dispatch System
+![Profile Views](https://komarev.com/ghpvc/?username=KelvinW918&color=58a6ff&style=flat-square)
 
 <div align="center">
 
