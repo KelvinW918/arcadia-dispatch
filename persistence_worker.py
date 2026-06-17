@@ -34,7 +34,7 @@ DB_PORT = int(os.getenv("DB_PORT", 5432))
 DB_NAME = os.getenv("DB_NAME", "postgres")
 
 def create_ssl_context():
-    """Crea contexto SSL para SASL_SSL"""
+    """Crea contexto SSL para SASL_SSL y PostgreSQL"""
     ssl_context = ssl.create_default_context()
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
@@ -86,12 +86,15 @@ class PersistenceWorker:
         conn = None
         cursor = None
         try:
+            # Conexión a PostgreSQL con SSL
+            ssl_context = create_ssl_context()
             conn = pg8000.connect(
                 user=DB_USER,
                 password=DB_PASSWORD,
                 host=DB_HOST,
                 port=DB_PORT,
-                database=DB_NAME
+                database=DB_NAME,
+                ssl_context=ssl_context  # ← AÑADIDO SSL
             )
             cursor = conn.cursor()
             
@@ -163,10 +166,10 @@ class PersistenceWorker:
                     
                 except json.JSONDecodeError as e:
                     logger.error(f"❌ Error decodificando mensaje: {e}")
-                    await self.consumer.commit()  # Saltar mensaje corrupto
+                    await self.consumer.commit()
                 except Exception as e:
                     logger.error(f"❌ Error procesando registro de orden: {e}")
-                    await self.consumer.commit()  # Saltar mensaje problemático
+                    await self.consumer.commit()
         finally:
             if self.consumer:
                 await self.consumer.stop()
