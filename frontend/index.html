@@ -9,106 +9,414 @@
     <style>
         #map { height: calc(100vh - 80px); }
         .dark-theme-map { filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%); }
+        
+        /* Mejoras estéticas */
+        .stat-card {
+            transition: all 0.3s ease;
+            cursor: default;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px -10px rgba(239, 68, 68, 0.3);
+        }
+        .unit-marker {
+            border: 2px solid white;
+            border-radius: 50%;
+            width: 12px;
+            height: 12px;
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+        }
+        .pulse-dot {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .glow-text {
+            text-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+        }
+        .table-row {
+            transition: all 0.2s ease;
+        }
+        .table-row:hover {
+            background-color: rgba(239, 68, 68, 0.1);
+        }
+        
+        /* Scrollbar personalizada */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1a1a1a;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #ef4444;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #dc2626;
+        }
+        
+        /* Badge de estado */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .status-badge.active {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .status-badge.inactive {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        .status-badge.standby {
+            background: rgba(251, 191, 36, 0.2);
+            color: #f59e0b;
+            border: 1px solid rgba(251, 191, 36, 0.3);
+        }
     </style>
 </head>
 <body class="bg-gray-950 text-gray-100 font-sans min-h-screen flex flex-col">
 
-    <header class="bg-gray-900 border-b border-gray-800 px-6 py-4 flex justify-between items-center shadow-lg">
+    <header class="bg-gray-900 border-b border-gray-800 px-6 py-4 flex flex-col md:flex-row justify-between items-center shadow-lg">
         <div class="flex items-center space-x-3">
-            <span class="text-red-500 text-2xl animate-pulse">●</span>
-            <h1 class="text-xl font-bold tracking-wider text-gray-200">EMERGENCY DISPATCH LIVE (ARAGUA)</h1>
+            <span class="text-red-500 text-2xl pulse-dot">●</span>
+            <h1 class="text-xl font-bold tracking-wider text-gray-200 glow-text">🚒 ARCADIA · DISPATCH LIVE</h1>
+            <span class="hidden md:inline-block text-xs px-2 py-1 bg-red-500/10 text-red-400 rounded-full border border-red-500/20">ARAGUA</span>
         </div>
-        <div class="text-sm text-gray-400 bg-gray-950 px-3 py-1.5 rounded border border-gray-800">
-            Backend: <span class="text-green-400 font-mono">Go v1.21 (Port 8081)</span>
+        <div class="flex items-center space-x-3 mt-2 md:mt-0">
+            <span class="text-xs text-gray-400 hidden sm:inline-flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-green-400 inline-block pulse-dot"></span>
+                Backend: <span class="text-green-400 font-mono">Go v1.21</span>
+            </span>
+            <span class="text-xs bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 font-mono">
+                :8081
+            </span>
         </div>
     </header>
 
     <main class="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-4 p-4">
-        <div class="lg:col-span-1 bg-gray-900 rounded-xl p-4 border border-gray-800 flex flex-col justify-between shadow-xl">
-            <div>
-                <h2 class="text-lg font-semibold mb-4 text-red-400 border-b border-gray-800 pb-2">📊 Analítica de Unidades</h2>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm text-gray-400">
-                        <thead class="text-xs text-gray-400 uppercase bg-gray-950">
-                            <tr>
-                                <th class="p-2 border border-gray-800">Unidad</th>
-                                <th class="p-2 border border-gray-800 text-center">Despachos</th>
-                                <th class="p-2 border border-gray-800 text-right">ETA Prom</th>
-                            </tr>
-                        </thead>
-                        <tbody id="metrics-table">
-                            <tr><td colspan="3" class="p-4 text-center text-gray-600">Conectando con Backend...</td></tr>
-                        </tbody>
-                    </table>
+        <!-- Panel izquierdo - Estadísticas -->
+        <div class="lg:col-span-1 bg-gray-900 rounded-xl p-4 border border-gray-800 flex flex-col shadow-xl">
+            <div class="flex items-center justify-between mb-4 border-b border-gray-800 pb-2">
+                <h2 class="text-lg font-semibold text-red-400">📊 ANALÍTICA</h2>
+                <span class="text-xs text-gray-500" id="last-update">Actualizando...</span>
+            </div>
+            
+            <!-- Estadísticas rápidas -->
+            <div class="grid grid-cols-2 gap-2 mb-4" id="quick-stats">
+                <div class="stat-card bg-gray-800/50 rounded-lg p-3 text-center border border-gray-700">
+                    <p class="text-xs text-gray-400">Total</p>
+                    <p class="text-xl font-bold text-white" id="stat-total">0</p>
                 </div>
+                <div class="stat-card bg-gray-800/50 rounded-lg p-3 text-center border border-gray-700">
+                    <p class="text-xs text-gray-400">ETA Prom</p>
+                    <p class="text-xl font-bold text-green-400" id="stat-avg-eta">0 min</p>
+                </div>
+            </div>
+            
+            <!-- Tabla de unidades -->
+            <div class="flex-1 overflow-y-auto max-h-[calc(100vh-300px)]">
+                <table class="w-full text-left text-sm">
+                    <thead class="text-xs text-gray-400 uppercase bg-gray-950 sticky top-0">
+                        <tr>
+                            <th class="p-2 border-b border-gray-800">Unidad</th>
+                            <th class="p-2 border-b border-gray-800 text-center">Despachos</th>
+                            <th class="p-2 border-b border-gray-800 text-right">ETA</th>
+                        </tr>
+                    </thead>
+                    <tbody id="metrics-table">
+                        <tr><td colspan="3" class="p-4 text-center text-gray-500">⏳ Conectando...</td></tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
+        <!-- Mapa -->
         <div class="lg:col-span-3 bg-gray-900 rounded-xl overflow-hidden border border-gray-800 shadow-xl relative">
             <div id="map" class="w-full h-full dark-theme-map"></div>
+            <!-- Overlay de información en el mapa -->
+            <div class="absolute bottom-4 right-4 bg-gray-900/90 backdrop-blur-sm px-3 py-2 rounded-lg border border-gray-700 text-xs text-gray-400">
+                <span class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-green-400 pulse-dot inline-block"></span>
+                    Sistema activo
+                </span>
+            </div>
         </div>
     </main>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        const map = L.map('map').setView([10.2442, -67.5921], 12);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+        // ============================================
+        // CONFIGURACIÓN
+        // ============================================
+        const API_URL = 'https://arcadia-backend.onrender.com';
+        const REFRESH_INTERVAL = 5000; // 5 segundos
 
+        // ============================================
+        // INICIALIZAR MAPA
+        // ============================================
+        const map = L.map('map').setView([10.2442, -67.5921], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap'
+        }).addTo(map);
+
+        // ============================================
+        // ESTADOS
+        // ============================================
         let activeMarkers = {};
         let activeRoutes = {};
 
+        // ============================================
+        // ESTILOS DE RUTAS
+        // ============================================
         const routeStyles = {
-            'UNIT-FIRE-03': { color: '#ef4444', weight: 4, opacity: 0.8 },
-            'UNIT-AMBULANCE-01': { color: '#10b981', weight: 4, opacity: 0.8 },
-            'UNIT-POLICE-09': { color: '#3b82f6', weight: 4, opacity: 0.8 },
-            'default': { color: '#f59e0b', weight: 3, opacity: 0.7 }
+            'UNIT-FIRE-03': { color: '#ef4444', weight: 4, opacity: 0.8, dashArray: null },
+            'UNIT-AMBULANCE-01': { color: '#10b981', weight: 4, opacity: 0.8, dashArray: null },
+            'UNIT-POLICE-09': { color: '#3b82f6', weight: 4, opacity: 0.8, dashArray: null },
+            'default': { color: '#f59e0b', weight: 3, opacity: 0.6, dashArray: '5, 10' }
         };
 
+        // ============================================
+        // ICONOS PERSONALIZADOS
+        // ============================================
+        const unitIcons = {
+            'UNIT-FIRE-03': L.divIcon({
+                className: 'unit-marker',
+                html: '🔥',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            }),
+            'UNIT-AMBULANCE-01': L.divIcon({
+                className: 'unit-marker',
+                html: '🚑',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            }),
+            'UNIT-POLICE-09': L.divIcon({
+                className: 'unit-marker',
+                html: '👮',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+            }),
+            'default': L.divIcon({
+                className: 'unit-marker',
+                html: '📍',
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+            })
+        };
+
+        // ============================================
+        // FUNCIONES AUXILIARES
+        // ============================================
         function parseWKTPoint(wkt) {
             if (!wkt || typeof wkt !== 'string') return null;
-            const coords = wkt.replace("POINT(", "").replace(")", "").split(" ");
-            return [parseFloat(coords[1]), parseFloat(coords[0])];
+            try {
+                const coords = wkt.replace("POINT(", "").replace(")", "").split(" ");
+                return [parseFloat(coords[1]), parseFloat(coords[0])];
+            } catch {
+                return null;
+            }
         }
 
+        function parseWKTLineString(wkt) {
+            if (!wkt || typeof wkt !== 'string') return null;
+            try {
+                const coordsStr = wkt.replace("LINESTRING(", "").replace(")", "");
+                const points = coordsStr.split(",").map(p => {
+                    const [lng, lat] = p.trim().split(" ").map(Number);
+                    return [lat, lng];
+                });
+                return points;
+            } catch {
+                return null;
+            }
+        }
+
+        function getUnitIcon(unitId) {
+            return unitIcons[unitId] || unitIcons['default'];
+        }
+
+        function getRouteStyle(unitId) {
+            return routeStyles[unitId] || routeStyles['default'];
+        }
+
+        // ============================================
+        // FETCH ANALYTICS
+        // ============================================
         async function fetchAnalytics() {
             try {
-                const response = await fetch('http://127.0.0.1:8081/api/analytics');
+                const response = await fetch(`${API_URL}/api/analytics`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
                 const data = await response.json();
-                updateUI(data || []);
-            } catch (error) { console.error('Error:', error); }
+                
+                if (!Array.isArray(data)) {
+                    console.warn('Respuesta no es un array:', data);
+                    showError('Formato de datos inválido');
+                    return;
+                }
+                
+                updateUI(data);
+                document.getElementById('last-update').textContent = `🔄 ${new Date().toLocaleTimeString()}`;
+                
+            } catch (error) {
+                console.error('Error fetching analytics:', error);
+                showError(`Error: ${error.message}`);
+            }
         }
 
+        // ============================================
+        // UPDATE UI
+        // ============================================
         function updateUI(metrics) {
             const tableBody = document.getElementById('metrics-table');
+            
+            if (!metrics || metrics.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-gray-500">📭 Sin datos aún</td></tr>`;
+                updateQuickStats(0, 0);
+                return;
+            }
+
             tableBody.innerHTML = '';
-            metrics.forEach(metric => {
+            let totalDespachos = 0;
+            let totalETA = 0;
+
+            metrics.forEach((metric, index) => {
+                const unidad = metric.unidad || 'Unidad desconocida';
+                const despachos = metric.total_despachos || 0;
+                const eta = metric.eta_promedio_min || 0;
+                totalDespachos += despachos;
+                totalETA += eta;
+
+                // Fila de la tabla
                 const row = document.createElement('tr');
-                row.className = "border-b border-gray-800 hover:bg-gray-800/50";
-                row.innerHTML = `<td class="p-2 font-mono">${metric.unidad}</td><td class="p-2 text-center">${metric.total_despachos}</td><td class="p-2 text-right">${metric.eta_promedio_min} min</td>`;
+                row.className = 'table-row border-b border-gray-800/50';
+                row.innerHTML = `
+                    <td class="p-2 font-mono text-xs">
+                        <span class="flex items-center gap-2">
+                            <span class="w-2 h-2 rounded-full ${despachos > 0 ? 'bg-green-400' : 'bg-gray-600'}"></span>
+                            ${unidad}
+                        </span>
+                    </td>
+                    <td class="p-2 text-center font-bold ${despachos > 0 ? 'text-white' : 'text-gray-500'}">
+                        ${despachos}
+                    </td>
+                    <td class="p-2 text-right ${eta > 0 ? 'text-green-400' : 'text-gray-500'}">
+                        ${eta > 0 ? `${eta.toFixed(1)} min` : '—'}
+                    </td>
+                `;
                 tableBody.appendChild(row);
 
-                // Manejo seguro del GeoJSON
-                if (metric.ultima_ruta) {
-                    try {
-                        const geo = typeof metric.ultima_ruta === 'string' ? JSON.parse(metric.ultima_ruta) : metric.ultima_ruta;
-                        if (activeRoutes[metric.unidad]) map.removeLayer(activeRoutes[metric.unidad]);
-                        activeRoutes[metric.unidad] = L.geoJSON(geo, { style: routeStyles[metric.unidad] || routeStyles['default'] }).addTo(map);
-                    } catch (e) { console.error("Error GeoJSON", e); }
+                // ============================================
+                // PROCESAR CENTROIDE (Marcador)
+                // ============================================
+                const latLng = parseWKTPoint(metric.centroide_operaciones);
+                if (latLng && despachos > 0) {
+                    if (activeMarkers[unidad]) {
+                        activeMarkers[unidad].setLatLng(latLng);
+                    } else {
+                        const icon = getUnitIcon(unidad);
+                        const marker = L.marker(latLng, { icon }).addTo(map);
+                        marker.bindPopup(`
+                            <div style="color:white; background:#1a1a1a; padding:8px; border-radius:8px; min-width:150px;">
+                                <strong style="color:#ef4444;">${unidad}</strong><br>
+                                <span style="color:#aaa;">Despachos: <strong style="color:white;">${despachos}</strong></span><br>
+                                <span style="color:#aaa;">ETA Prom: <strong style="color:#10b981;">${eta.toFixed(1)} min</strong></span>
+                            </div>
+                        `);
+                        activeMarkers[unidad] = marker;
+                    }
+                } else if (activeMarkers[unidad]) {
+                    // Si no hay datos, quitar marcador
+                    map.removeLayer(activeMarkers[unidad]);
+                    delete activeMarkers[unidad];
                 }
 
-                const latLng = parseWKTPoint(metric.centroide_operaciones);
-                if (latLng) {
-                    if (activeMarkers[metric.unidad]) {
-                        activeMarkers[metric.unidad].setLatLng(latLng);
-                    } else {
-                        activeMarkers[metric.unidad] = L.marker(latLng).addTo(map).bindPopup(`Unidad: ${metric.unidad}`);
+                // ============================================
+                // PROCESAR RUTA
+                // ============================================
+                if (metric.ultima_ruta) {
+                    try {
+                        let routeData = metric.ultima_ruta;
+                        if (typeof routeData === 'string') {
+                            routeData = JSON.parse(routeData);
+                        }
+                        
+                        if (routeData && routeData.geometry) {
+                            if (activeRoutes[unidad]) {
+                                map.removeLayer(activeRoutes[unidad]);
+                            }
+                            
+                            const style = getRouteStyle(unidad);
+                            activeRoutes[unidad] = L.geoJSON(routeData, { style }).addTo(map);
+                        }
+                    } catch (e) {
+                        console.warn('Error procesando ruta:', e);
                     }
                 }
             });
+
+            // Actualizar estadísticas rápidas
+            const avgETA = metrics.length > 0 ? totalETA / metrics.length : 0;
+            updateQuickStats(totalDespachos, avgETA);
         }
 
+        function updateQuickStats(total, avgETA) {
+            document.getElementById('stat-total').textContent = total;
+            document.getElementById('stat-avg-eta').textContent = avgETA > 0 ? `${avgETA.toFixed(1)} min` : '—';
+        }
+
+        function showError(message) {
+            const tableBody = document.getElementById('metrics-table');
+            tableBody.innerHTML = `
+                <tr><td colspan="3" class="p-4 text-center text-red-400">
+                    ⚠️ ${message}
+                </td></tr>
+            `;
+            document.getElementById('last-update').textContent = '❌ Error';
+        }
+
+        // ============================================
+        // INICIALIZAR
+        // ============================================
         fetchAnalytics();
-        setInterval(fetchAnalytics, 3000);
+        setInterval(fetchAnalytics, REFRESH_INTERVAL);
+
+        // Mostrar mensaje de bienvenida en el mapa
+        const welcomePopup = L.popup()
+            .setLatLng([10.2442, -67.5921])
+            .setContent(`
+                <div style="color:white; background:#1a1a1a; padding:12px; border-radius:8px; text-align:center; max-width:200px;">
+                    🚒 <strong style="color:#ef4444;">Arcadia</strong><br>
+                    <span style="color:#aaa;">Sistema de Despacho</span><br>
+                    <span style="color:#555;font-size:10px;">Aragua · Venezuela</span>
+                </div>
+            `)
+            .openOn(map);
+
+        // Cerrar popup después de 5 segundos
+        setTimeout(() => map.closePopup(welcomePopup), 5000);
+
+        console.log('🚒 Arcadia - Emergency Dispatch System');
+        console.log(`📡 API: ${API_URL}`);
+        console.log(`🔄 Refrescando cada ${REFRESH_INTERVAL/1000}s`);
     </script>
 </body>
 </html>

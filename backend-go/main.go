@@ -13,12 +13,12 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
-// Configuración de infraestructura
+// Configuración de infraestructura - USAR RENDER
 const (
 	KafkaBrokers = "127.0.0.1:19092"
 	Topic        = "dispatched-orders"
 	GroupID      = "persistence-go-group"
-	ConnString   = "postgres://postgres:supersecretpassword@127.0.0.1:5432/postgres"
+	ConnString   = "postgres://arcadia_db_user:f0N5Lq7w5NA3mo4rwyfOV0ahFBHlu8CY@dpg-d8pcskv7f7vs73cri750-a.oregon-postgres.render.com:5432/arcadia_db"
 )
 
 // Estructuras para decodificar el evento de Redpanda
@@ -46,6 +46,19 @@ type UnitMetric struct {
 	CentroideOperaciones string  `json:"centroide_operaciones"`
 }
 
+// Estructura para la respuesta de unidades (frontend)
+type UnitData struct {
+	ID              string  `json:"id"`
+	IncidentID      string  `json:"incident_id"`
+	Resource        string  `json:"resource"`
+	Priority        string  `json:"priority"`
+	ETA             float64 `json:"eta"`
+	Lat             float64 `json:"lat"`
+	Lng             float64 `json:"lng"`
+	Route           string  `json:"route"`
+	CreatedAt       string  `json:"created_at"`
+}
+
 func main() {
 	ctx := context.Background()
 
@@ -55,11 +68,38 @@ func main() {
 	go startKafkaConsumer(ctx)
 
 	// 2. Levantar el Servidor HTTP de Analítica en el hilo principal
-	http.HandleFunc("/api/analytics", handleAnalytics)
-	log.Println("📊 Servidor API escuchando en http://127.0.0.1:8081/api/analytics")
+	// Middleware CORS
+	corsMiddleware := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			if r.Method == "OPTIONS" {
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			next(w, r)
+		}
+	}
+
+	http.HandleFunc("/api/analytics", corsMiddleware(handleAnalytics))
+	http.HandleFunc("/api/units", corsMiddleware(handleUnits))
+	http.HandleFunc("/api/health", corsMiddleware(handleHealth))
+
+	log.Println("📊 Servidor API escuchando en http://127.0.0.1:8081")
+	log.Println("   🔹 /api/analytics - Estadísticas de unidades")
+	log.Println("   🔹 /api/units - Unidades despachadas")
+	log.Println("   🔹 /api/health - Health check")
+	
 	if err := http.ListenAndServe(":8081", nil); err != nil {
 		log.Fatalf("Error en el servidor HTTP: %v", err)
 	}
+}
+
+// --- HEALTH CHECK ---
+func handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"status": "ok", "message": "Backend Arcadia funcionando"}`))
 }
 
 // --- TRABAJADOR DE CONSUMO Y PERSISTENCIA ESPACIAL ---
@@ -133,10 +173,9 @@ func startKafkaConsumer(ctx context.Context) {
 	}
 }
 
-// --- ENDPOINT DE LA API HTTP (ANALÍTICA EN VIVO) ---
+// --- ENDPOINT: ANALÍTICA ---
 func handleAnalytics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*") // Habilitar CORS para tu futuro Frontend
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -174,5 +213,97 @@ func handleAnalytics(w http.ResponseWriter, r *http.Request) {
 		metrics = append(metrics, m)
 	}
 
+	// Si no hay datos, devolver array vacío
+	if metrics == nil {
+		metrics = []UnitMetric{}
+	}
+	
 	json.NewEncoder(w).Encode(metrics)
+}
+
+// --- ENDPOINT: UNIDADES PARA EL FRONTEND ---
+func handleUnits(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	db, err := pgx.Connect(ctx, ConnString)
+	if err != nil {
+		http.Error(w, `{"error": "No se pudo conectar a la base de datos"}`, http.StatusInternalServerError)
+		return
+	}
+	defer db.Close(ctx)
+
+	// Consultar las últimas órdenes con información de ruta
+	query := `
+		SELECT 
+			order_id,
+			incident_id,
+			assigned_resource_id,
+			priority,
+			eta_minutes,
+			ST_AsText(route_geom) as route_wkt,
+			created_at
+		FROM dispatched_orders_history 
+		ORDER BY created_at DESC 
+		LIMIT 50;`
+
+	rows, err := db.Query(ctx, query)
+	if err != nil {
+		http.Error(w, fmt.Sprintf(`{"error": "%v"}`, err), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var units []UnitData
+	for rows.Next() {
+		var u UnitData
+		var routeWKT string
+		var createdAt time.Time
+		
+		err := rows.Scan(&u.ID, &u.IncidentID, &u.Resource, &u.Priority, &u.ETA, &routeWKT, &createdAt)
+		if err != nil {
+			log.Printf("Error leyendo fila: %v", err)
+			continue
+		}
+		
+		u.CreatedAt = createdAt.Format(time.RFC3339)
+		
+		// Extraer lat/lng del centro de la ruta (punto medio)
+		// Parsear WKT para obtener el centro aproximado
+		// Simple: usar el punto medio del primer y último punto de la ruta
+		u.Lat = 10.24 // Valor por defecto (Maracay)
+		u.Lng = -67.60
+		
+		// Si hay ruta, extraer coordenadas aproximadas
+		if len(routeWKT) > 10 {
+			// Extraer números de la WKT
+			// Formato: LINESTRING(lon1 lat1, lon2 lat2, ...)
+			coordsStr := strings.TrimPrefix(routeWKT, "LINESTRING(")
+			coordsStr = strings.TrimSuffix(coordsStr, ")")
+			points := strings.Split(coordsStr, ",")
+			if len(points) > 0 {
+				// Tomar el primer punto como referencia
+				firstPoint := strings.TrimSpace(points[0])
+				parts := strings.Fields(firstPoint)
+				if len(parts) >= 2 {
+					var lon, lat float64
+					fmt.Sscanf(parts[0], "%f", &lon)
+					fmt.Sscanf(parts[1], "%f", &lat)
+					u.Lng = lon
+					u.Lat = lat
+				}
+			}
+		}
+		
+		units = append(units, u)
+	}
+
+	// Si no hay datos, devolver array vacío
+	if units == nil {
+		units = []UnitData{}
+	}
+	
+	json.NewEncoder(w).Encode(units)
 }

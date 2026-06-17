@@ -1,4 +1,7 @@
 services:
+  # ============================================
+  # BACKEND GO - API
+  # ============================================
   - type: web
     name: arcadia-backend
     runtime: image
@@ -19,3 +22,96 @@ services:
         value: f0N5Lq7w5NA3mo4rwyfOV0ahFBHlu8CY
       - key: DB_NAME
         value: arcadia_db
+      - key: KAFKA_BROKERS
+        value: d8pdqqurhnmrt12oecjg.any.us-east-1.mpx.prd.cloud.redpanda.com:9092
+      - key: KAFKA_USERNAME
+        value: arcadia-prod
+      - key: KAFKA_PASSWORD
+        value: TYzKrB0qVDVsEPIakwgY77JirgvHyA
+
+  # ============================================
+  # AGENT ORCHESTRATOR - Procesa incidentes
+  # ============================================
+  - type: web
+    name: arcadia-orchestrator
+    runtime: image
+    plan: free
+    dockerfilePath: ./Dockerfile.worker
+    startCommand: python agent_orchestrator.py
+    envVars:
+      - key: KAFKA_BROKERS
+        value: d8pdqqurhnmrt12oecjg.any.us-east-1.mpx.prd.cloud.redpanda.com:9092
+      - key: KAFKA_USERNAME
+        value: arcadia-prod
+      - key: KAFKA_PASSWORD
+        value: TYzKrB0qVDVsEPIakwgY77JirgvHyA
+      - key: KAFKA_TOPIC_RAW
+        value: raw-incidents
+      - key: KAFKA_TOPIC_DISPATCHED
+        value: dispatched-orders
+      - key: DB_HOST
+        value: dpg-d8pcskv7f7vs73cri750-a
+      - key: DB_PORT
+        value: 5432
+      - key: DB_USER
+        value: arcadia_db_user
+      - key: DB_PASSWORD
+        value: f0N5Lq7w5NA3mo4rwyfOV0ahFBHlu8CY
+      - key: DB_NAME
+        value: arcadia_db
+      - key: OLLAMA_ENDPOINT
+        value: ""
+
+  # ============================================
+  # PERSISTENCE WORKER - Guarda órdenes en DB
+  # ============================================
+  - type: web
+    name: arcadia-persistence-worker
+    runtime: image
+    plan: free
+    dockerfilePath: ./Dockerfile.worker
+    startCommand: python persistence_worker.py
+    envVars:
+      - key: KAFKA_BROKERS
+        value: d8pdqqurhnmrt12oecjg.any.us-east-1.mpx.prd.cloud.redpanda.com:9092
+      - key: KAFKA_USERNAME
+        value: arcadia-prod
+      - key: KAFKA_PASSWORD
+        value: TYzKrB0qVDVsEPIakwgY77JirgvHyA
+      - key: KAFKA_TOPIC_DISPATCHED
+        value: dispatched-orders
+      - key: DB_HOST
+        value: dpg-d8pcskv7f7vs73cri750-a
+      - key: DB_PORT
+        value: 5432
+      - key: DB_USER
+        value: arcadia_db_user
+      - key: DB_PASSWORD
+        value: f0N5Lq7w5NA3mo4rwyfOV0ahFBHlu8CY
+      - key: DB_NAME
+        value: arcadia_db
+
+  # ============================================
+  # STRESS PRODUCER - Genera datos de prueba
+  # ============================================
+  - type: cron
+    name: arcadia-stress-producer
+    schedule: "*/10 * * * *"
+    runtime: image
+    dockerfilePath: ./Dockerfile.worker
+    startCommand: python stress_producer.py
+    envVars:
+      - key: KAFKA_BROKERS
+        value: d8pdqqurhnmrt12oecjg.any.us-east-1.mpx.prd.cloud.redpanda.com:9092
+      - key: KAFKA_USERNAME
+        value: arcadia-prod
+      - key: KAFKA_PASSWORD
+        value: TYzKrB0qVDVsEPIakwgY77JirgvHyA
+      - key: KAFKA_TOPIC
+        value: raw-incidents
+      - key: PRODUCER_MODE
+        value: continuous
+      - key: PRODUCER_INTERVAL
+        value: "30"
+      - key: PRODUCER_BATCH
+        value: "3"

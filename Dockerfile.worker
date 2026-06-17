@@ -1,0 +1,24 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Instalar dependencias del sistema
+RUN apt-get update && apt-get install -y \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copiar requirements.txt
+COPY requirements.txt .
+
+# Instalar dependencias Python
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar archivos necesarios
+COPY agent_orchestrator.py .
+COPY persistence_worker.py .
+COPY stress_producer.py .
+COPY schemas.py .
+COPY init_timescale.py .
+
+# Comando por defecto (se sobrescribe en cada servicio)
+CMD ["python", "persistence_worker.py"]
