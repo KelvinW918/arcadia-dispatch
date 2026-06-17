@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: arcadia-backend
+    runtime: image
+    repo: https://github.com/KelvinW918/arcadia-dispatch
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        value: postgresql://arcadia_db_user:f0N5Lq7w5NA3mo4rwyfOV0ahFBHlu8CY@dpg-d8pcskv7f7vs73cri750-a/arcadia_db
+      - key: PORT
+        value: 8080
+      - key: DB_HOST
+        value: dpg-d8pcskv7f7vs73cri750-a
+      - key: DB_PORT
+        value: 5432
+      - key: DB_USER
+        value: arcadia_db_user
+      - key: DB_PASSWORD
+        value: f0N5Lq7w5NA3mo4rwyfOV0ahFBHlu8CY
+      - key: DB_NAME
+        value: arcadia_db
+      - key: CORS_ORIGIN
+        value: https://arcadia-dispatch-iota.vercel.app/
