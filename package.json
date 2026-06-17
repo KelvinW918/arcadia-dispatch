@@ -1,0 +1,6 @@
+{
+  "name": "arcadia-dispatch",
+  "version": "1.0.0",
+  "description": "Emergency Dispatch System",
+  "main": "index.js"
+}
