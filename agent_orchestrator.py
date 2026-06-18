@@ -40,7 +40,7 @@ DB_PORT = int(os.getenv("DB_PORT", 5432))
 DB_NAME = os.getenv("DB_NAME", "postgres")
 
 def create_ssl_context():
-    """Crea contexto SSL para SASL_SSL"""
+    """Crea contexto SSL para SASL_SSL y PostgreSQL"""
     ssl_context = ssl.create_default_context()
     ssl_context.check_hostname = False
     ssl_context.verify_mode = ssl.CERT_NONE
@@ -93,12 +93,14 @@ class AgentOrchestratorService:
         
         # Conexión temporal de inicialización
         try:
+            # Conexión a PostgreSQL con SSL
             init_conn = pg8000.connect(
                 user=DB_USER,
                 password=DB_PASSWORD,
                 host=DB_HOST,
                 port=DB_PORT,
-                database=DB_NAME
+                database=DB_NAME,
+                ssl_context=create_ssl_context()  # ← AGREGADO SSL
             )
             init_conn.autocommit = True
             logger.info("🗄️ Conexión inicial establecida. Asegurando tablas...")
@@ -176,9 +178,14 @@ class AgentOrchestratorService:
         """Calcula el índice H3 creando una conexión dedicada por hilo para evitar colisiones."""
         h3_index = h3.latlng_to_cell(lat, lon, 8)
         
-        # Conexión efímera exclusiva para este hilo
+        # Conexión a PostgreSQL con SSL
         conn = pg8000.connect(
-            user=DB_USER, password=DB_PASSWORD, host=DB_HOST, port=DB_PORT, database=DB_NAME
+            user=DB_USER,
+            password=DB_PASSWORD,
+            host=DB_HOST,
+            port=DB_PORT,
+            database=DB_NAME,
+            ssl_context=create_ssl_context()  # ← AGREGADO SSL
         )
         cursor = conn.cursor()
         try:
