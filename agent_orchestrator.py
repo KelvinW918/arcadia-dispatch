@@ -176,7 +176,7 @@ class AgentOrchestratorService:
     # --- AGENTE 2: Geolocalizador e Indexador Espacial Thread-Safe ---
     def _agent_spatial_allocation(self, lat: float, lon: float) -> tuple[str, str]:
         """Calcula el índice H3 creando una conexión dedicada por hilo para evitar colisiones."""
-        h3_index = h3.latlng_to_cell(lat, lon, 8)
+        h3_index = h3.geo_to_h3(lat, lon, 8)
         
         # Conexión a PostgreSQL con SSL
         conn = pg8000.connect(
