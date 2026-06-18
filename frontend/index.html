@@ -219,7 +219,8 @@
         // ------------------------------------------
         // CONFIGURACIÓN
         // ------------------------------------------
-        const API_URL = 'https://arcadia-backend.onrender.com';
+        // URL CORRECTA DEL BACKEND
+        const API_URL = 'https://arcadia-backend-bj5m.onrender.com';
         const REFRESH_INTERVAL = 5000;
 
         // ------------------------------------------
@@ -373,17 +374,6 @@
                         `);
                         state.markers[unidad] = marker;
                     }
-                }
-
-                // RUTA EN MAPA
-                if (metric.ultima_ruta) {
-                    try {
-                        let routeData = typeof metric.ultima_ruta === 'string' ? JSON.parse(metric.ultima_ruta) : metric.ultima_ruta;
-                        if (routeData?.geometry) {
-                            if (state.routes[unidad]) map.removeLayer(state.routes[unidad]);
-                            state.routes[unidad] = L.geoJSON(routeData, { style: getRouteStyle(unidad) }).addTo(map);
-                        }
-                    } catch (e) { /* ignorar rutas inválidas */ }
                 }
             });
 
